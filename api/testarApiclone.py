@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 app = Flask(__name__)
 
 # Carregar o modelo treinado a partir do arquivo .h5
-SEED = 215
+SEED = 179
 
 
 def set_seeds(seed=SEED):
@@ -36,7 +36,7 @@ def set_global_determinism(seed=SEED):
 
 @app.route("/previsao", methods=["POST"])
 def prever():
-    model = load_model("modelo_seed42.h5")
+    model = load_model("modelo_Lag5.h5")
     scaler_carregado = joblib.load("meu_scaler_minmax.joblib")
     # Receber os dados da requisição em formato JSON
     dados_entrada = request.get_json()
@@ -49,9 +49,9 @@ def prever():
     valores_entrada = dados_entrada["valores"]
     valores_entrada = np.array(valores_entrada).reshape(-1, 1)
     valores_entrada = scaler_carregado.transform(valores_entrada)
-    # Verificar se há 3 valores de entrada
-    if len(valores_entrada) != 3:
-        return jsonify({"erro": "Deve haver exatamente 3 valores de entrada"}), 400
+    # Verificar se há 5 valores de entrada
+    if len(valores_entrada) != 5:
+        return jsonify({"erro": "Deve haver exatamente 5 valores de entrada"}), 400
 
     entrada_array = np.array([valores_entrada])
 
@@ -87,10 +87,12 @@ def retreinar():
             data_power.shift(1),
             data_power.shift(2),
             data_power.shift(3),
+            data_power.shift(4),
+            data_power.shift(5),
         ],
         axis=1,
     )
-    y = pd.concat([data_power.shift(-3)], axis=1)
+    y = pd.concat([data_power.shift(-5)], axis=1)
     X.dropna(inplace=True)
     y.dropna(subset=["energy"], inplace=True)
     X = X.to_numpy()
@@ -99,7 +101,7 @@ def retreinar():
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, shuffle=False, stratify=None
     )
-    model = tf.keras.models.load_model("modelo_australia.h5")
+    model = tf.keras.models.load_model("australia_grid_5.h5")
     model.trainable = False
     print(model.summary())
     for layer in model.layers:
@@ -127,7 +129,7 @@ def retreinar():
     erro = np.mean(((predicoes - real) ** 2) ** 0.5)
 
     if count == 0:
-        ultimo_loss_lido = 130
+        ultimo_loss_lido = 124
 
     # Salvar o modelo treinado
     if erro < ultimo_loss_lido:
@@ -137,9 +139,9 @@ def retreinar():
             {
                 "Ribeirão": {
                     "mensagem": "Modelo retreinado com sucesso e o erro caiu em relação ao anterior e será atualizado no BD",
-                    "valor_Loss_anterior": ultimo_loss_lido,
                     "valor_Loss_retreinamento": history.history["loss"][-1],
-                    "erro": erro,
+                    "erro_Anterior": ultimo_loss_lido,
+                    "erro_Atual": erro,
                 }
             }
         )
@@ -150,9 +152,9 @@ def retreinar():
             {
                 "Ribeirão": {
                     "mensagem": "Modelo retreinado com sucesso, mas o erro não caiu em relação ao anterior. Logo, será mantido o anterior no BD",
-                    "valor_Loss_anterior": ultimo_loss_lido,
                     "valor_Loss_retreinamento": history.history["loss"][-1],
-                    "erro": erro,
+                    "erro_Anterior": ultimo_loss_lido,
+                    "erro_Atual": erro,
                 }
             }
         )
